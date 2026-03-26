@@ -1,0 +1,27 @@
+{
+  "name": "test",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build:css": "tailwindcss -i css/input.css -o css/tailwind.css",
+    "watch:css": "tailwindcss -i css/input.css -o css/tailwind.css --watch",
+    "test": "node /tmp/test_udvs.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ChenChen-100123/test.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/ChenChen-100123/test/issues"
+  },
+  "homepage": "https://github.com/ChenChen-100123/test#readme",
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.2.2",
+    "tailwindcss": "^4.2.2"
+  }
+}
