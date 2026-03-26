@@ -1,0 +1,15 @@
+# Dependencies
+node_modules/
+
+# Build lock file (keep for reproducible installs)
+# package-lock.json
+
+# Editor directories and files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS metadata
+.DS_Store
+Thumbs.db

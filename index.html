@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UDVS 协议演示 — 通用指定验证者签名</title>
+
+  <!-- Tailwind CSS (compiled locally via @tailwindcss/cli) -->
+  <link rel="stylesheet" href="css/tailwind.css" />
+
+  <style>
+    /* Custom utility used by JS to trigger the animation on value update */
+    .fade-in { animation: fadeIn 0.45s ease-out both; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* Slide-in animation used on panels */
+    .animate-slide-in { animation: slideIn 0.45s ease-out both; }
+    @keyframes slideIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* Pulse for "running" step badges */
+    .animate-pulse { animation: pulse 1.2s ease-in-out infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+    /* Scrollbar styling */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #1f2937; }
+    ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 3px; }
+
+    /* Monospace value boxes */
+    .val { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }
+
+    /* Disabled button style */
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* Flow message animation */
+    .flow-msg { animation: fadeIn 0.5s ease-out both; }
+  </style>
+</head>
+
+<body class="bg-gray-950 text-gray-100 min-h-screen">
+
+  <!-- ═══════════════════════════════ HEADER ═══════════════════════════════ -->
+  <header class="bg-gradient-to-r from-blue-950 via-purple-950 to-blue-950 border-b border-gray-800 py-10 px-6">
+    <div class="max-w-6xl mx-auto text-center">
+      <div class="text-5xl mb-3">🔐</div>
+      <h1 class="text-4xl font-extrabold tracking-tight bg-gradient-to-r from-blue-400 via-purple-300 to-purple-400 bg-clip-text text-transparent">
+        UDVS 协议演示
+      </h1>
+      <p class="mt-2 text-lg text-gray-400">
+        Universal Designated Verifier Signature — 通用指定验证者签名
+      </p>
+      <p class="mt-1 text-sm text-gray-500">
+        基于 OR-证明构造（Cramer–Damgård–Schoenmakers 1994）·  Fiat-Shamir 变换 · SHA-256
+      </p>
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto px-4 py-8 space-y-8">
+
+    <!-- ════════════════════ CONCEPT CARDS ════════════════════ -->
+    <section class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="bg-gray-800 border border-gray-700 rounded-2xl p-5">
+        <div class="text-2xl mb-2">🔑</div>
+        <h2 class="font-semibold text-blue-300 mb-2">核心性质</h2>
+        <ul class="text-sm text-gray-300 space-y-1 list-disc list-inside">
+          <li>签名者 Alice 向指定验证者 Bob 发送签名</li>
+          <li>只有 Bob 能理解该签名的指定含义</li>
+          <li>Bob <em class="text-yellow-300">无法</em>向第三方证明签名来自 Alice</li>
+          <li>Bob 可以自己生成同样有效的签名（模拟性）</li>
+        </ul>
+      </div>
+      <div class="bg-gray-800 border border-gray-700 rounded-2xl p-5">
+        <div class="text-2xl mb-2">⚙️</div>
+        <h2 class="font-semibold text-green-300 mb-2">OR-证明构造</h2>
+        <ul class="text-sm text-gray-300 space-y-1 list-disc list-inside">
+          <li>证明「知道 x_a」<strong>或</strong>「知道 x_b」</li>
+          <li>Alice 用真实密钥 x_a，模拟 x_b 分支</li>
+          <li>Bob 用真实密钥 x_b，模拟 x_a 分支</li>
+          <li>验证者无法区分哪个分支是真实的</li>
+        </ul>
+      </div>
+      <div class="bg-gray-800 border border-gray-700 rounded-2xl p-5">
+        <div class="text-2xl mb-2">🎯</div>
+        <h2 class="font-semibold text-purple-300 mb-2">应用场景</h2>
+        <ul class="text-sm text-gray-300 space-y-1 list-disc list-inside">
+          <li>电子投票 — 隐私保护</li>
+          <li>隐私认证 — 属性证明</li>
+          <li>数字版权管理</li>
+          <li>区块链匿名合同</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ════════════════════ SYSTEM PARAMS ════════════════════ -->
+    <section class="bg-gray-800 border border-gray-700 rounded-2xl p-6">
+      <h2 class="text-sm font-semibold text-yellow-300 uppercase tracking-widest mb-4">⚙ 系统参数</h2>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+        <div class="bg-gray-900 rounded-xl p-4">
+          <span class="text-gray-500 block mb-1">安全素数  p</span>
+          <span id="param-p" class="val text-yellow-300 text-base font-bold">—</span>
+        </div>
+        <div class="bg-gray-900 rounded-xl p-4">
+          <span class="text-gray-500 block mb-1">子群阶  q = (p−1)/2</span>
+          <span id="param-q" class="val text-yellow-300 text-base font-bold">—</span>
+        </div>
+        <div class="bg-gray-900 rounded-xl p-4">
+          <span class="text-gray-500 block mb-1">生成元  g  (order q mod p)</span>
+          <span id="param-g" class="val text-yellow-300 text-base font-bold">—</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════════════ MAIN PROTOCOL PANEL ════════════════════ -->
+    <section class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+
+      <!-- ── Alice ── -->
+      <div class="bg-gray-800 border-2 border-blue-700 rounded-2xl overflow-hidden flex flex-col">
+        <div class="bg-blue-900/60 px-6 py-4 flex items-center gap-3 border-b border-blue-800">
+          <div class="w-11 h-11 rounded-full bg-blue-500 flex items-center justify-center text-white font-black text-xl shadow">A</div>
+          <div>
+            <p class="font-bold text-blue-200 leading-none">Alice</p>
+            <p class="text-xs text-blue-400 mt-0.5">签名者 (Signer)</p>
+          </div>
+        </div>
+        <div class="p-5 space-y-4 flex-1">
+          <!-- Keys -->
+          <div class="space-y-3">
+            <div class="bg-gray-900 rounded-xl p-3">
+              <p class="text-xs text-gray-500 mb-1">私钥  x_a</p>
+              <p id="alice-sk" class="val text-blue-300 text-sm">未生成</p>
+            </div>
+            <div class="bg-gray-900 rounded-xl p-3">
+              <p class="text-xs text-gray-500 mb-1">公钥  y_a = g<sup>x_a</sup> mod p</p>
+              <p id="alice-pk" class="val text-blue-300 text-sm">未生成</p>
+            </div>
+          </div>
+          <!-- Alice's signing output (hidden until step 2) -->
+          <div id="alice-sig-panel" class="hidden bg-blue-950/40 border border-blue-800 rounded-xl p-4 space-y-2 animate-slide-in">
+            <p class="text-xs text-blue-400 font-semibold uppercase tracking-widest">签名输出 σ'</p>
+            <div class="space-y-1 text-xs">
+              <div class="flex gap-2 items-baseline">
+                <span class="text-gray-500 w-12 flex-shrink-0">T_a</span>
+                <span id="sig-T_a" class="val text-blue-300"></span>
+              </div>
+              <div class="flex gap-2 items-baseline">
+                <span class="text-gray-500 w-12 flex-shrink-0">c_a</span>
+                <span id="sig-c_a" class="val text-blue-300"></span>
+              </div>
+              <div class="flex gap-2 items-baseline">
+                <span class="text-gray-500 w-12 flex-shrink-0">s_a</span>
+                <span id="sig-s_a" class="val text-blue-300"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Protocol Steps (Centre) ── -->
+      <div class="bg-gray-800 border border-gray-700 rounded-2xl overflow-hidden flex flex-col">
+        <div class="bg-gray-700/50 px-6 py-4 border-b border-gray-700">
+          <h2 class="font-bold text-gray-200 text-center">🔄 协议交互流程</h2>
+        </div>
+        <div class="p-5 flex-1 flex flex-col gap-5">
+
+          <!-- Message input -->
+          <div>
+            <label class="text-xs text-gray-400 uppercase tracking-widest block mb-2">📝 签名消息</label>
+            <textarea
+              id="msg-input"
+              rows="3"
+              class="w-full bg-gray-900 border border-gray-700 rounded-xl p-3 text-white placeholder-gray-600 resize-none text-sm focus:border-purple-500 focus:outline-none"
+              placeholder="输入要签名的消息…"
+            >Hello, UDVS Protocol!</textarea>
+          </div>
+
+          <!-- Step buttons -->
+          <div class="space-y-2">
+
+            <!-- Step 1 -->
+            <button id="btn-keygen"
+              class="w-full flex items-center gap-3 px-4 py-3 bg-blue-700 hover:bg-blue-600 active:bg-blue-800 rounded-xl transition-colors text-left">
+              <span id="step1-badge" class="w-7 h-7 rounded-full bg-gray-600 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">1</span>
+              <span class="flex-1 text-sm font-medium text-white">密钥生成</span>
+              <span id="step1-status" class="text-xs font-medium text-gray-400">待执行</span>
+            </button>
+
+            <!-- Step 2 -->
+            <button id="btn-sign" disabled
+              class="w-full flex items-center gap-3 px-4 py-3 bg-indigo-700 hover:bg-indigo-600 active:bg-indigo-800 rounded-xl transition-colors text-left">
+              <span id="step2-badge" class="w-7 h-7 rounded-full bg-gray-600 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">2</span>
+              <span class="flex-1 text-sm font-medium text-white">Alice 生成 UDVS</span>
+              <span id="step2-status" class="text-xs font-medium text-gray-400">待执行</span>
+            </button>
+
+            <!-- Step 3 -->
+            <button id="btn-verify" disabled
+              class="w-full flex items-center gap-3 px-4 py-3 bg-purple-700 hover:bg-purple-600 active:bg-purple-800 rounded-xl transition-colors text-left">
+              <span id="step3-badge" class="w-7 h-7 rounded-full bg-gray-600 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">3</span>
+              <span class="flex-1 text-sm font-medium text-white">Bob 验证签名</span>
+              <span id="step3-status" class="text-xs font-medium text-gray-400">待执行</span>
+            </button>
+
+            <!-- Step 4 -->
+            <button id="btn-simulate" disabled
+              class="w-full flex items-center gap-3 px-4 py-3 bg-yellow-700 hover:bg-yellow-600 active:bg-yellow-800 rounded-xl transition-colors text-left">
+              <span id="step4-badge" class="w-7 h-7 rounded-full bg-gray-600 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">4</span>
+              <span class="flex-1 text-sm font-medium text-white">不可转移性演示</span>
+              <span id="step4-status" class="text-xs font-medium text-gray-400">待执行</span>
+            </button>
+          </div>
+
+          <!-- Reset -->
+          <button id="btn-reset"
+            class="w-full py-2.5 bg-gray-700 hover:bg-gray-600 rounded-xl text-sm text-gray-300 transition-colors mt-auto">
+            🔄 重置
+          </button>
+        </div>
+      </div>
+
+      <!-- ── Bob ── -->
+      <div class="bg-gray-800 border-2 border-purple-700 rounded-2xl overflow-hidden flex flex-col">
+        <div class="bg-purple-900/60 px-6 py-4 flex items-center gap-3 border-b border-purple-800">
+          <div class="w-11 h-11 rounded-full bg-purple-500 flex items-center justify-center text-white font-black text-xl shadow">B</div>
+          <div>
+            <p class="font-bold text-purple-200 leading-none">Bob</p>
+            <p class="text-xs text-purple-400 mt-0.5">指定验证者 (Designated Verifier)</p>
+          </div>
+        </div>
+        <div class="p-5 space-y-4 flex-1">
+          <!-- Keys -->
+          <div class="space-y-3">
+            <div class="bg-gray-900 rounded-xl p-3">
+              <p class="text-xs text-gray-500 mb-1">私钥  x_b</p>
+              <p id="bob-sk" class="val text-purple-300 text-sm">未生成</p>
+            </div>
+            <div class="bg-gray-900 rounded-xl p-3">
+              <p class="text-xs text-gray-500 mb-1">公钥  y_b = g<sup>x_b</sup> mod p</p>
+              <p id="bob-pk" class="val text-purple-300 text-sm">未生成</p>
+            </div>
+          </div>
+          <!-- Bob's received signature values (hidden until step 2) -->
+          <div id="bob-recv-panel" class="hidden bg-purple-950/40 border border-purple-800 rounded-xl p-4 space-y-2 animate-slide-in">
+            <p class="text-xs text-purple-400 font-semibold uppercase tracking-widest">接收到的签名</p>
+            <div class="space-y-1 text-xs">
+              <div class="flex gap-2 items-baseline">
+                <span class="text-gray-500 w-12 flex-shrink-0">T_b</span>
+                <span id="recv-T_b" class="val text-purple-300"></span>
+              </div>
+              <div class="flex gap-2 items-baseline">
+                <span class="text-gray-500 w-12 flex-shrink-0">c_b</span>
+                <span id="recv-c_b" class="val text-purple-300"></span>
+              </div>
+              <div class="flex gap-2 items-baseline">
+                <span class="text-gray-500 w-12 flex-shrink-0">s_b</span>
+                <span id="recv-s_b" class="val text-purple-300"></span>
+              </div>
+            </div>
+          </div>
+          <!-- Verification result (hidden until step 3) -->
+          <div id="verify-badge" class="hidden animate-slide-in"></div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ════════════════════ FLOW DIAGRAM ════════════════════ -->
+    <section id="flow-section" class="hidden bg-gray-800 border border-gray-700 rounded-2xl p-6 animate-slide-in">
+      <h2 class="text-sm font-semibold text-green-300 uppercase tracking-widest mb-5">🔄 消息流</h2>
+      <div class="flex items-center gap-4">
+        <!-- Alice avatar -->
+        <div class="flex-shrink-0 text-center w-20">
+          <div class="w-14 h-14 rounded-full bg-blue-600 flex items-center justify-center text-white font-black text-2xl mx-auto shadow-lg ring-2 ring-blue-400">A</div>
+          <p class="text-blue-300 text-sm font-medium mt-1">Alice</p>
+        </div>
+        <!-- Arrow area -->
+        <div class="flex-1 min-w-0 space-y-2" id="flow-messages"></div>
+        <!-- Bob avatar -->
+        <div class="flex-shrink-0 text-center w-20">
+          <div class="w-14 h-14 rounded-full bg-purple-600 flex items-center justify-center text-white font-black text-2xl mx-auto shadow-lg ring-2 ring-purple-400">B</div>
+          <p class="text-purple-300 text-sm font-medium mt-1">Bob</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════════════ NON-TRANSFERABILITY ════════════════════ -->
+    <section id="nontransfer-section" class="hidden bg-gray-800 border-2 border-yellow-700 rounded-2xl p-6 animate-slide-in">
+      <h2 class="text-sm font-semibold text-yellow-300 uppercase tracking-widest mb-2">🔒 不可转移性对比</h2>
+      <p class="text-sm text-gray-400 mb-5">
+        下表展示 Alice 生成的 UDVS 与 Bob 自己模拟的 UDVS。两者均通过验证，
+        第三方 Carol <strong class="text-white">无法区分</strong>哪份签名出自 Alice，从而保证不可转移性。
+      </p>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- Alice's signature -->
+        <div class="bg-blue-950/40 border border-blue-700 rounded-xl p-5">
+          <h3 class="font-semibold text-blue-300 mb-3 flex items-center gap-2">
+            <span class="w-6 h-6 rounded-full bg-blue-600 text-xs flex items-center justify-center font-bold text-white">A</span>
+            Alice 生成的 UDVS
+          </h3>
+          <table class="w-full text-xs font-mono">
+            <tbody class="space-y-1">
+              <tr><td class="text-gray-500 pr-3 py-0.5">T_a</td><td id="cmp-alice-T_a" class="text-blue-300 break-all"></td></tr>
+              <tr><td class="text-gray-500 pr-3 py-0.5">T_b</td><td id="cmp-alice-T_b" class="text-blue-300 break-all"></td></tr>
+              <tr><td class="text-gray-500 pr-3 py-0.5">c_a</td><td id="cmp-alice-c_a" class="text-blue-300 break-all"></td></tr>
+              <tr><td class="text-gray-500 pr-3 py-0.5">s_a</td><td id="cmp-alice-s_a" class="text-blue-300 break-all"></td></tr>
+              <tr><td class="text-gray-500 pr-3 py-0.5">c_b</td><td id="cmp-alice-c_b" class="text-blue-300 break-all"></td></tr>
+              <tr><td class="text-gray-500 pr-3 py-0.5">s_b</td><td id="cmp-alice-s_b" class="text-blue-300 break-all"></td></tr>
+              <tr class="border-t border-blue-800 mt-1"><td class="text-gray-500 pr-3 pt-2">验证</td><td id="cmp-alice-valid" class="pt-2"></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Bob's simulation -->
+        <div class="bg-purple-950/40 border border-purple-700 rounded-xl p-5">
+          <h3 class="font-semibold text-purple-300 mb-3 flex items-center gap-2">
+            <span class="w-6 h-6 rounded-full bg-purple-600 text-xs flex items-center justify-center font-bold text-white">B</span>
+            Bob 模拟的 UDVS
+          </h3>
+          <table class="w-full text-xs font-mono">
+            <tbody>
+              <tr><td class="text-gray-500 pr-3 py-0.5">T_a</td><td id="cmp-bob-T_a" class="text-purple-300 break-all"></td></tr>
+              <tr><td class="text-gray-500 pr-3 py-0.5">T_b</td><td id="cmp-bob-T_b" class="text-purple-300 break-all"></td></tr>
+              <tr><td class="text-gray-500 pr-3 py-0.5">c_a</td><td id="cmp-bob-c_a" class="text-purple-300 break-all"></td></tr>
+              <tr><td class="text-gray-500 pr-3 py-0.5">s_a</td><td id="cmp-bob-s_a" class="text-purple-300 break-all"></td></tr>
+              <tr><td class="text-gray-500 pr-3 py-0.5">c_b</td><td id="cmp-bob-c_b" class="text-purple-300 break-all"></td></tr>
+              <tr><td class="text-gray-500 pr-3 py-0.5">s_b</td><td id="cmp-bob-s_b" class="text-purple-300 break-all"></td></tr>
+              <tr class="border-t border-purple-800 mt-1"><td class="text-gray-500 pr-3 pt-2">验证</td><td id="cmp-bob-valid" class="pt-2"></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Conclusion -->
+      <div class="mt-5 bg-yellow-900/40 border border-yellow-700 rounded-xl p-4">
+        <p class="text-yellow-200 text-sm leading-relaxed">
+          <strong>📌 结论：</strong>
+          两份签名的统计分布完全相同，任何第三方（Carol）收到其中一份都无法判断它是由
+          Alice 还是 Bob 生成的。这正是 UDVS
+          <strong class="text-white">不可转移性</strong>（Non-Transferability）的核心：
+          Bob 无法利用该签名向外界证明 Alice 确实发送过此消息。
+        </p>
+      </div>
+    </section>
+
+    <!-- ════════════════════ LOG PANEL ════════════════════ -->
+    <section class="bg-gray-800 border border-gray-700 rounded-2xl p-6">
+      <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-widest mb-4">📋 执行日志</h2>
+      <div id="log"
+        class="bg-gray-950 rounded-xl p-4 font-mono text-xs leading-relaxed space-y-0.5 max-h-72 overflow-y-auto">
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ═══════════════════════════════ FOOTER ═══════════════════════════════ -->
+  <footer class="text-center text-xs text-gray-600 py-6">
+    UDVS Demo · OR-Proof Construction · 仅供学习演示，请勿用于生产环境
+  </footer>
+
+  <!-- Load the app as an ES-module (imports udvs.js internally) -->
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
