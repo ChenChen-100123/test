@@ -52,7 +52,7 @@ UDVS 是一种特殊的数字签名方案，具有以下核心性质：
 npm install
 
 # 直接用任意 HTTP 服务器打开（需要 ES module 支持）
-python3 -m http.server 8080
+python -m http.server 8080
 # 然后访问 http://localhost:8080
 
 # 修改样式后重新编译 CSS
